@@ -1,10 +1,11 @@
 import tkinter as tk
 from tkinter import ttk
-from tkinter import filedialog
 import json
 import re
 import openai
 import time
+import difflib
+
 
 # Your provided functions go here
 def get_updated_code_old(prompt):
@@ -17,10 +18,9 @@ def get_updated_code_old(prompt):
     print("----- sending request to prompt the GPT-3 API -----")
     start_time = time.time()
 
-
     # Set up the OpenAI API credentials openai.
-    openai.api_key = "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"
-    model_engine = "gpt-3.5-turbo"
+    openai.api_key = "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"
+    model_engine = "text-davinci-003"
     # Set the GPT-3 model engine to use
     # Generate corrected code using GPT-3.5 API
     response = openai.Completion.create(engine=model_engine,
@@ -28,17 +28,26 @@ def get_updated_code_old(prompt):
                                         max_tokens=1024,
                                         n=1,
                                         stop=None,
-                                        temperature=0.4, )
+                                        temperature=0.2, )
     end_time = time.time()
     # print the time taken to get the response in seconds
     print("----- Time taken to get the response in seconds: ", end_time - start_time, "-----")
     print("----- Got response from GPT-3 API -----")
     # Extract the corrected code from the response
     corrected_code = response.choices[0].text.strip()
+    # split by \n
+    corrected_code = corrected_code.split('\n')
+    # remove empty lines from last and first
+    while corrected_code[0] == '':
+        corrected_code.pop(0)
+    while corrected_code[-1] == '':
+        corrected_code.pop(-1)
+    # remove pass from last line
+    if 'pass' in corrected_code[-1].strip():
+        corrected_code.pop(-1)
+    # join using \n
+    corrected_code = '\n'.join(corrected_code)
     return corrected_code
-
-
-import openai
 
 def extract_python_code(text):
     code_pattern = re.compile(r'<code>(.*?)<\/code>', re.DOTALL)
@@ -58,14 +67,14 @@ def get_updated_code(prompt):
     """
 
     # Set up the OpenAI API credentials
-    openai.api_key = "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"
+    openai.api_key = "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"
     model_engine = "gpt-3.5-turbo"
 
     # Generate corrected code using GPT-3.5 API
     response = openai.ChatCompletion.create(
         model=model_engine,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that takes partial python code and fixes it without changing starting code or ending code. send only code back to user. Don't add code at the end even if its incomplete."},
+            {"role": "system", "content": "You are a automated ai that takes partial python code and fixes it without giving explanation and  without changing starting code or ending code. Don't add code at the end even if its incomplete."},
             {"role": "user", "content": prompt}
         ]
     )
@@ -104,6 +113,13 @@ def get_updated_code(prompt):
         code = '\n'.join(code_in_lines)
         return code
     else:
+        remove_words = ('code:', 'Code:')
+        for i in remove_words:
+            if i in corrected_code:
+                corrected_code = corrected_code[corrected_code.find(i) + len(i):]
+        if 'Here' in corrected_code:
+            # trim from 'Here's' till the first : is found
+            code = corrected_code[corrected_code.find(':') + 1:]
 
         code_in_lines = corrected_code.split('\n')
         removed_lines = 0
@@ -184,8 +200,7 @@ def extract_code_context(file_path, bug_line, context_lines=5):
     return start_line + 1, ''.join(code_context)
 
 
-
-def get_function_or_class_string(file_path, start_line, end_line):
+def get_new_block_as_string(file_path, start_line, end_line):
     """
     Get the complete function or class which encloses the bug,
     But limits the search to 10 lines before the start_line and 5 lines after the end_line
@@ -212,7 +227,7 @@ def get_function_or_class_string(file_path, start_line, end_line):
     for i in range(start_line - 1, max(start_line - backward_search_limit - 1, -1), -1):
         lines_searched += 1
         line = lines[i]
-        if line.lstrip().startswith(('def ', 'Class ')):
+        if line.lstrip().startswith(('if', 'for', 'def ', 'try', 'while', 'Class ')):
             start_index = i
             break
 
@@ -227,8 +242,8 @@ def get_function_or_class_string(file_path, start_line, end_line):
         start_statement = lines[start_index].strip()
         start_index += 1
 
-
     return ''.join(lines[start_index:end_index+1]), start_index, end_index
+
 
 def update_line_number(msg, new_line):
     """
@@ -264,7 +279,7 @@ def write_updated_code_to_file(file_path, code, prev_code=None):
     # start_line and end_line are code in the file
     # add a comment in place of start_line saying bug fixed
     print("prev_code :\n", prev_code)
-    print('before intentation')
+    print('before indentation')
     print("code :\n", code)
     # get the index of code that matches line 1 , and next 2 lines should match line 2 and line 3
     prev_code = prev_code.split('\n')
@@ -275,7 +290,6 @@ def write_updated_code_to_file(file_path, code, prev_code=None):
             break
 
     end_index = start_index + len(prev_code) - 1
-
 
     # GET THE INDENTATION OF THE start_line is string of code
     start_indent = len(lines[start_index]) - len(lines[start_index].lstrip())
@@ -289,8 +303,8 @@ def write_updated_code_to_file(file_path, code, prev_code=None):
     code = comment + '\n'.join(code)
     # get empty lines from prev_code at the end
 
-    print('after intentation')
-    print("code:\n" , code)
+    print('after indentation')
+    print("code:\n", code)
 
     # count the number of empty lines at the end of prev_code
     # it should not count empty lines in the middle of the code
@@ -310,11 +324,6 @@ def write_updated_code_to_file(file_path, code, prev_code=None):
 
     return
 
-
-
-import tkinter as tk
-from tkinter import ttk
-import difflib
 
 class CodeFixerUI:
     def __init__(self, master):
@@ -337,15 +346,23 @@ class CodeFixerUI:
         self.updated_code_text = tk.Text(self.main_frame, wrap=tk.NONE, height=20, width=50)
         self.updated_code_text.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
 
+        self.message_label = ttk.Label(self.main_frame, text="Message:")
+        self.message_label.grid(row=0, column=2, sticky=(tk.W, tk.N))
+        self.message_text = tk.Text(self.main_frame, wrap=tk.WORD, height=20, width=20)
+        self.message_text.grid(row=1, column=2,  padx=(10, 0), sticky=(tk.W, tk.E, tk.N, tk.S))
+
         # Create the buttons
         self.ignore_button = ttk.Button(self.main_frame, text="Ignore", command=self.ignore_bug)
-        self.ignore_button.grid(row=2, column=0, pady=(10, 0), sticky=(tk.W, tk.E))
+        self.ignore_button.grid(row=3, column=0, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+
         self.fix_button = ttk.Button(self.main_frame, text="Fix", command=self.fix_bug)
-        self.fix_button.grid(row=2, column=1, pady=(10, 0), sticky=(tk.W, tk.E))
-        self.fix_button = ttk.Button(self.main_frame, text="retry", command=self.retry)
-        self.fix_button.grid(row=2, column=2, pady=(10, 0), sticky=(tk.W, tk.E))
-        self.diff_button = ttk.Button(self.main_frame, text="Show Diff", command=self.show_diff)
-        self.diff_button.grid(row=2, column=3, pady=(10, 0), padx=(10, 0), sticky=(tk.W, tk.E))
+        self.fix_button.grid(row=2, column=0, columnspan=3, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+
+        self.retry_button = ttk.Button(self.main_frame, text="Retry", command=self.retry)
+        self.retry_button.grid(row=3, column=1, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+
+        self.diff_button = ttk.Button(self.main_frame, text="Show Diff", command=self.highlight_differences)
+        self.diff_button.grid(row=3, column=2, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         # Configure the column and row weights
         self.master.columnconfigure(0, weight=1)
@@ -363,31 +380,42 @@ class CodeFixerUI:
         global code_data
         self.code_data = self.process_bug()
 
-    def compare_texts(self):
+    def highlight_differences(self):
         content1 = self.prev_code_text.get('1.0', tk.END).splitlines()
         content2 = self.updated_code_text.get('1.0', tk.END).splitlines()
 
         d = difflib.Differ()
         diff = list(d.compare(content1, content2))
 
-        self.result_text.delete('1.0', tk.END)
-        for line in diff:
+        self.prev_code_text.configure(state='normal')
+        self.updated_code_text.configure(state='normal')
+
+        self.prev_code_text.tag_remove('removed', '1.0', tk.END)
+        self.updated_code_text.tag_remove('added', '1.0', tk.END)
+
+        for i, line in enumerate(diff):
             if line.startswith('-'):
-                self.result_text.insert(tk.END, line[2:] + '\n', 'removed')
+                pos = content1.index(line[2:])
+                if pos != -1:
+                    line_num = pos + 1
+                    self.prev_code_text.tag_add('removed', f'{line_num}.0', f'{line_num}.end')
             elif line.startswith('+'):
-                self.result_text.insert(tk.END, line[2:] + '\n', 'added')
+                pos = content2.index(line[2:])
+                if pos != -1:
+                    line_num = pos + 1
+                    self.updated_code_text.tag_add('added', f'{line_num}.0', f'{line_num}.end')
             else:
-                self.result_text.insert(tk.END, line[2:] + '\n')
+                pass
+        # Configure the tags for the added and removed code
+        self.prev_code_text.tag_configure('removed', background='lightcoral')
+        self.updated_code_text.tag_configure('added', background='lightgreen')
 
-    def show_diff(self):
-        self.result_window = tk.Toplevel(self.master)
-        self.result_window.title('Comparison Result')
-        self.result_text = tk.Text(self.result_window, wrap=tk.NONE)
-        self.result_text.pack(fill='both', expand=True)
-        self.result_text.tag_configure('added', background='lightgreen')
-        self.result_text.tag_configure('removed', background='lightcoral')
-
-        self.compare_texts()
+    def close_diff_window(self):
+        try:
+            if self.result_window:
+                self.result_window.destroy()
+        except:
+            pass
 
     def retry(self):
         suggested_code = self.code_data[1]
@@ -403,7 +431,7 @@ class CodeFixerUI:
 
     def fix_bug(self):
         # Fix the bug and move to the next bug
-        updated_code = self.code_data[1]
+        updated_code = self.updated_code_text.get(1.0, tk.END)
         code = self.code_data[0]
         # add processing txt to in updated window
         self.updated_code_text.delete(1.0, tk.END)
@@ -424,9 +452,9 @@ class CodeFixerUI:
             self.updated_code_text.delete(1.0, tk.END)
             self.updated_code_text.insert(1.0, 'Fetching...')
             d = self.data[self.current_bug_index]
-            self.path = "/Users/SamarthMahendra/draup-server-qa/" + d['file_path'][2:]
+            self.path = "/Users/Mayank/Desktop/codebase/draup-server/" + d['file_path'][2:]
             code, start_index, end_index = \
-                get_function_or_class_string(self.path, d['start_line'], d['end_line'])
+                get_new_block_as_string(self.path, d['start_line'], d['end_line'])
             wrong_suggestion_message = None
             if wrong_code:
                 wrong_suggestion_message = """
@@ -435,15 +463,16 @@ class CodeFixerUI:
                 """
             fix_msg = d['message']
             fix_msg = update_line_number(fix_msg, d['start_line'] - start_index)
-            msg = f"""Here's a partial Python code with a bug, please fix the bug without completing the code or adding any new lines of code::
-            code:\n{code}
+            msg = f"""Here's a partial Python code with a bug inside <python>:
+            code: \n {code} \n 
             line number: {d['start_line'] - start_index}
             message: {fix_msg}
             instructions:
-            * correct the indentation of before sending the code
-            * add pass statement at end the end if its incomplete
-            * make only obvious bug fixes
-
+            * Use message to get the context of the bug
+            * don't include any explanation 
+            * correct the indentation before sending the code
+            * add pass statement at the end if its incomplete
+            * send code inside code block
             {str(wrong_suggestion_message)}
             """
             updated_code = get_updated_code(msg) # Display the previous code in the UI
@@ -471,13 +500,20 @@ class CodeFixerUI:
                 temp_new_code[i] = temp_new_code[i][indentation:]
             temp_new_code = '\n'.join(temp_new_code)
 
+            fix_msg_to_display = fix_msg + '\n' + (code.split('\n')[d['start_line'] - start_index - 1]).lstrip()
+
             temp_prev_code = '\n'.join(temp_prev_code)
             self.prev_code_text.delete(1.0, tk.END)
             self.prev_code_text.insert(tk.END, temp_prev_code)
             # Display the updated code in the UI
             self.updated_code_text.delete(1.0, tk.END)
             self.updated_code_text.insert(tk.END, temp_new_code)
+
+            self.message_text.delete(1.0, tk.END)
+            self.message_text.insert(1.0, fix_msg_to_display)
+
             self.code_data = (code, updated_code)
+            self.highlight_differences()
             return self.code_data
         else:
             # Display a message when there are no more bugs
@@ -486,10 +522,12 @@ class CodeFixerUI:
             self.prev_code_text.insert(tk.END, "No more bugs to process")
             self.updated_code_text.insert(tk.END, "No more bugs to process")
 
+
 def main():
     root = tk.Tk()
     app = CodeFixerUI(root)
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
