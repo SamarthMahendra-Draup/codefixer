@@ -5,6 +5,7 @@ import re
 import openai
 import time
 import difflib
+import os
 
 
 # Your provided functions go here
@@ -19,7 +20,7 @@ def get_updated_code_old(prompt):
     start_time = time.time()
 
     # Set up the OpenAI API credentials openai.
-    openai.api_key = "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"
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
     model_engine = "text-davinci-003"
     # Set the GPT-3 model engine to use
     # Generate corrected code using GPT-3.5 API
@@ -27,7 +28,7 @@ def get_updated_code_old(prompt):
                                         prompt=prompt,
                                         max_tokens=1024,
                                         n=1,
-                                        stop=None,
+                                        stop="\n\n",
                                         temperature=0.2, )
     end_time = time.time()
     # print the time taken to get the response in seconds
@@ -49,6 +50,19 @@ def get_updated_code_old(prompt):
     corrected_code = '\n'.join(corrected_code)
     return corrected_code
 
+def save_dict_to_csv_file(data):
+    """
+    Save the dictionary to a csv file
+    Args: data: dict
+    Returns: None
+    """
+    if not os.path.exists('data.csv'):
+        with open('data.csv', 'w') as f:
+            f.write("prompt token,completion token\n")
+    with open('data.csv', 'a') as f:
+        f.write(f"{data['prompt_tokens']},{data['completion_tokens']}\n")
+
+
 def extract_python_code(text):
     code_pattern = re.compile(r'<code>(.*?)<\/code>', re.DOTALL)
     code_matches = code_pattern.findall(text)
@@ -67,7 +81,7 @@ def get_updated_code(prompt):
     """
 
     # Set up the OpenAI API credentials
-    openai.api_key = "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"
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
     model_engine = "gpt-3.5-turbo"
 
     # Generate corrected code using GPT-3.5 API
@@ -79,6 +93,7 @@ def get_updated_code(prompt):
         ]
     )
 
+    save_dict_to_csv_file(response["usage"])
     # Extract the corrected code from the response
     corrected_code = response.choices[0].message.content.strip()
     # extract code inside \n\n use regex
@@ -234,8 +249,17 @@ def get_new_block_as_string(file_path, start_line, end_line):
     if start_index is None:
         start_index = max(start_line - lines_searched, 0)
 
-    # Search forwards from end_line to find the end of the function or class
-    end_index = min(end_line + forward_search_limit, len(lines))
+    # Search forwards from end_line to find the return statement till forward_search_limit
+    end_index = None
+    lines_searched = 0
+    for i in range(end_line + 1, min(end_line + forward_search_limit + 1, len(lines))):
+        lines_searched += 1
+        line = lines[i]
+        if line.lstrip().startswith(('return ',)):
+            end_index = i
+            break
+    if end_index is None:
+        end_index = min(end_line + forward_search_limit, len(lines))
 
     start_statement = lines[start_index].strip()
     while not start_statement.strip() and start_index < end_index:
