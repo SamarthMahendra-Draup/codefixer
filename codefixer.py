@@ -50,7 +50,7 @@ def get_updated_code_old(prompt):
     corrected_code = '\n'.join(corrected_code)
     return corrected_code
 
-def save_dict_to_csv_file(data):
+def save_dict_to_csv_file(data, model_name):
     """
     Save the dictionary to a csv file
     Args: data: dict
@@ -58,9 +58,9 @@ def save_dict_to_csv_file(data):
     """
     if not os.path.exists('data.csv'):
         with open('data.csv', 'w') as f:
-            f.write("prompt token,completion token\n")
+            f.write("prompt token,completion token, model\n")
     with open('data.csv', 'a') as f:
-        f.write(f"{data['prompt_tokens']},{data['completion_tokens']}\n")
+        f.write(f"{data['prompt_tokens']},{data['completion_tokens']},{model_name}\n")
 
 
 def extract_python_code(text):
@@ -81,7 +81,7 @@ def get_updated_code_3(prompt):
     """
 
     # Set up the OpenAI API credentials
-    openai.api_key = os.environ.get("OPENAI_API_KEY_4")
+    openai.api_key = os.environ.get("OPENAI_API_KEY_3")
     model_engine = "gpt-4"
 
     # Generate corrected code using GPT-3.5 API
@@ -166,7 +166,7 @@ def get_updated_code(prompt):
     # Set up the OpenAI API credentials
     openai.api_key = os.environ.get("OPENAI_API_KEY_4")
     model_engine = "gpt-4"
-
+    start_time = time.time()
     # Generate corrected code using GPT-3.5 API
     response = openai.ChatCompletion.create(
         model=model_engine,
@@ -176,8 +176,10 @@ def get_updated_code(prompt):
             {"role": "user", "content": prompt}
         ]
     )
+    end_time = time.time()
+    response_time = end_time - start_time
     print(response)
-    save_dict_to_csv_file(response["usage"])
+    save_dict_to_csv_file(response["usage"], response['model'])
     # Extract the corrected code from the response
     corrected_code = response.choices[0].message.content.strip()
     print(corrected_code)
@@ -195,7 +197,7 @@ def get_updated_code(prompt):
     code_matches_2 = code_pattern_2.findall(code_matches)[0]
     if 'code' in code_matches_2:
         code_matches_2 = code_matches_2[code_matches_2.find('code:') + len('code:'):]
-    return code_matches_2
+    return code_matches_2, response_time
 
 
 
@@ -418,18 +420,21 @@ class CodeFixerUI:
         self.message_text = tk.Text(self.main_frame, wrap=tk.WORD, height=20, width=20)
         self.message_text.grid(row=1, column=2,  padx=(10, 0), sticky=(tk.W, tk.E, tk.N, tk.S))
 
+        self.response_time_text = tk.Text(self.main_frame, wrap=tk.WORD, height=1)
+        self.response_time_text.grid(row=2, column=0, columnspan=3, padx=(10, 0), sticky=(tk.W, tk.E, tk.N, tk.S))
+
         # Create the buttons
         self.ignore_button = ttk.Button(self.main_frame, text="Ignore", command=self.ignore_bug)
-        self.ignore_button.grid(row=3, column=0, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.ignore_button.grid(row=4, column=0, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         self.fix_button = ttk.Button(self.main_frame, text="Fix", command=self.fix_bug)
-        self.fix_button.grid(row=2, column=0, columnspan=3, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.fix_button.grid(row=3, column=0, columnspan=3, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         self.retry_button = ttk.Button(self.main_frame, text="Retry", command=self.retry)
-        self.retry_button.grid(row=3, column=1, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.retry_button.grid(row=4, column=1, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         self.diff_button = ttk.Button(self.main_frame, text="Show Diff", command=self.highlight_differences)
-        self.diff_button.grid(row=3, column=2, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.diff_button.grid(row=4, column=2, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         # Configure the column and row weights
         self.master.columnconfigure(0, weight=1)
@@ -530,6 +535,8 @@ class CodeFixerUI:
                 """
             fix_msg = d['message']
             fix_msg = update_line_number(fix_msg, d['start_line'] - start_index)
+            if wrong_code:
+                fix_msg = self.message_text.get(1.0, tk.END)
             msg = f"""Here's a partial Python code with a bug inside <python> </python>:
             code: \n {code} \n 
             line number: {d['start_line'] - start_index}
@@ -537,6 +544,7 @@ class CodeFixerUI:
             Strictly follow the following
             instructions:
             * Use message to get the context of the bug
+            * Fix the bug
             * don't include any explanation 
             * correct the indentation before sending the code
             * send code inside code block
@@ -546,7 +554,7 @@ class CodeFixerUI:
             </python>
             {str(wrong_suggestion_message)}
             """
-            updated_code = get_updated_code(msg) # Display the previous code in the UI
+            updated_code, response_time = get_updated_code(msg) # Display the previous code in the UI
             print("-----old code-----")
             print(code)
             print("-----new code-----")
@@ -571,7 +579,10 @@ class CodeFixerUI:
                 temp_new_code[i] = temp_new_code[i][indentation:]
             temp_new_code = '\n'.join(temp_new_code)
 
-            fix_msg_to_display = fix_msg + '\n' + (code.split('\n')[d['start_line'] - start_index - 1]).lstrip()
+            if wrong_code:
+                fix_msg_to_display = fix_msg
+            else:
+                fix_msg_to_display = fix_msg + '\n' + (code.split('\n')[d['start_line'] - start_index - 1]).lstrip()
 
             temp_prev_code = '\n'.join(temp_prev_code)
             self.prev_code_text.delete(1.0, tk.END)
@@ -582,6 +593,11 @@ class CodeFixerUI:
 
             self.message_text.delete(1.0, tk.END)
             self.message_text.insert(1.0, fix_msg_to_display)
+
+            self.response_time_text.delete(1.0, tk.END)
+            # fomat the response time to 4 decimal places
+            response_time = "{:.4f}".format(response_time)
+            self.response_time_text.insert(1.0, f"Response Time: {response_time} sec")
 
             self.code_data = (code, updated_code)
             self.highlight_differences()
