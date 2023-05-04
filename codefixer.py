@@ -73,7 +73,7 @@ def extract_python_code(text):
     else:
         return None
 
-def get_updated_code(prompt):
+def get_updated_code_3(prompt):
     """
     Get the updated code from GPT-3 API
     Args: prompt: str
@@ -81,14 +81,14 @@ def get_updated_code(prompt):
     """
 
     # Set up the OpenAI API credentials
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
-    model_engine = "gpt-3.5-turbo"
+    openai.api_key = os.environ.get("OPENAI_API_KEY_4")
+    model_engine = "gpt-4"
 
     # Generate corrected code using GPT-3.5 API
     response = openai.ChatCompletion.create(
         model=model_engine,
         messages=[
-            {"role": "system", "content": "You are a automated ai that takes partial python code and fixes it without giving explanation and  without changing starting code or ending code. Don't add code at the end even if its incomplete."},
+            {"role": "system", "content": "You are a automated ai python code fixer that takes partial python code and fixes it without giving explanation and  without changing starting code or ending code."},
             {"role": "user", "content": prompt}
         ]
     )
@@ -155,6 +155,49 @@ def get_updated_code(prompt):
             corrected_code = corrected_code[corrected_code.find(':') + 1:]
 
         return corrected_code
+
+def get_updated_code(prompt):
+    """
+    Get the updated code from GPT-3 API
+    Args: prompt: str
+    Returns: str
+    """
+
+    # Set up the OpenAI API credentials
+    openai.api_key = os.environ.get("OPENAI_API_KEY_4")
+    model_engine = "gpt-4"
+
+    # Generate corrected code using GPT-3.5 API
+    response = openai.ChatCompletion.create(
+        model=model_engine,
+        messages=[
+            {"role": "system",
+             "content": "You are a automated ai python code fixer that takes partial python code and fixes it without giving explanation and  without changing starting code or ending code. and i strictly want python code inside <python> </python>"},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    print(response)
+    save_dict_to_csv_file(response["usage"])
+    # Extract the corrected code from the response
+    corrected_code = response.choices[0].message.content.strip()
+    print(corrected_code)
+    # extract code inside \n\n use regex
+
+    code_pattern = re.compile(r'```(.*?)```', re.DOTALL)
+    code_matches = code_pattern.findall(corrected_code)
+    # extract code inside <python> <python> use regex
+    if not code_matches:
+        code_matches = corrected_code
+    else:
+        code_matches = code_matches[0]
+
+    code_pattern_2 = re.compile(r'<python>(.*?)</python>', re.DOTALL)
+    code_matches_2 = code_pattern_2.findall(code_matches)[0]
+    if 'code' in code_matches_2:
+        code_matches_2 = code_matches_2[code_matches_2.find('code:') + len('code:'):]
+    return code_matches_2
+
+
 
 def get_sonar_report_data(filename='sonarqube_bugs.json'):
     """
@@ -487,16 +530,20 @@ class CodeFixerUI:
                 """
             fix_msg = d['message']
             fix_msg = update_line_number(fix_msg, d['start_line'] - start_index)
-            msg = f"""Here's a partial Python code with a bug inside <python>:
+            msg = f"""Here's a partial Python code with a bug inside <python> </python>:
             code: \n {code} \n 
             line number: {d['start_line'] - start_index}
             message: {fix_msg}
+            Strictly follow the following
             instructions:
             * Use message to get the context of the bug
             * don't include any explanation 
             * correct the indentation before sending the code
-            * add pass statement at the end if its incomplete
             * send code inside code block
+            response format : 
+            <python>
+            print('hello world')
+            </python>
             {str(wrong_suggestion_message)}
             """
             updated_code = get_updated_code(msg) # Display the previous code in the UI
