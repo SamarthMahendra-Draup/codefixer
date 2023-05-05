@@ -164,8 +164,8 @@ def get_updated_code(prompt):
     """
 
     # Set up the OpenAI API credentials
-    openai.api_key = os.environ.get("OPENAI_API_KEY_4")
-    model_engine = "gpt-4"
+    openai.api_key = os.environ.get("OPENAI_API_KEY_3")
+    model_engine = "gpt-3.5-turbo"
     start_time = time.time()
     # Generate corrected code using GPT-3.5 API
     response = openai.ChatCompletion.create(
@@ -405,36 +405,36 @@ class CodeFixerUI:
 
         # Create the label and text widget for previous code
         self.prev_code_label = ttk.Label(self.main_frame, text="Previous Code:")
-        self.prev_code_label.grid(row=0, column=0, sticky=(tk.W, tk.N))
+        self.prev_code_label.grid(row=2, column=0, sticky=(tk.W, tk.N))
         self.prev_code_text = tk.Text(self.main_frame, wrap=tk.NONE, height=20, width=50)
-        self.prev_code_text.grid(row=1, column=0, padx=(0, 10), sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.prev_code_text.grid(row=3, column=0, padx=(0, 10), sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Create the label and text widget for updated code
         self.updated_code_label = ttk.Label(self.main_frame, text="Updated Code:")
-        self.updated_code_label.grid(row=0, column=1, sticky=(tk.W, tk.N))
+        self.updated_code_label.grid(row=2, column=1, sticky=(tk.W, tk.N))
         self.updated_code_text = tk.Text(self.main_frame, wrap=tk.NONE, height=20, width=50)
-        self.updated_code_text.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.updated_code_text.grid(row=3, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-        self.message_label = ttk.Label(self.main_frame, text="Message:")
-        self.message_label.grid(row=0, column=2, sticky=(tk.W, tk.N))
-        self.message_text = tk.Text(self.main_frame, wrap=tk.WORD, height=20, width=20)
-        self.message_text.grid(row=1, column=2,  padx=(10, 0), sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.message_label = ttk.Label(self.main_frame, text="SonarQube Message:")
+        self.message_label.grid(row=0, column=0, sticky=(tk.W, tk.N))
+        self.message_text = tk.Text(self.main_frame, wrap=tk.WORD, height=2)
+        self.message_text.grid(row=1, column=0, columnspan=2, padx=(10, 0), sticky=(tk.W, tk.E, tk.N, tk.S))
 
         self.response_time_text = tk.Text(self.main_frame, wrap=tk.WORD, height=1)
-        self.response_time_text.grid(row=2, column=0, columnspan=3, padx=(10, 0), sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.response_time_text.grid(row=4, column=0, columnspan=3, padx=(10, 0), sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Create the buttons
         self.ignore_button = ttk.Button(self.main_frame, text="Ignore", command=self.ignore_bug)
-        self.ignore_button.grid(row=4, column=0, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.ignore_button.grid(row=6, column=0, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         self.fix_button = ttk.Button(self.main_frame, text="Fix", command=self.fix_bug)
-        self.fix_button.grid(row=3, column=0, columnspan=3, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.fix_button.grid(row=5, column=0, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         self.retry_button = ttk.Button(self.main_frame, text="Retry", command=self.retry)
-        self.retry_button.grid(row=4, column=1, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.retry_button.grid(row=5, column=1, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         self.diff_button = ttk.Button(self.main_frame, text="Show Diff", command=self.highlight_differences)
-        self.diff_button.grid(row=4, column=2, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
+        self.diff_button.grid(row=6, column=1, columnspan=1, pady=(10, 0), padx=(5, 5), sticky=(tk.W, tk.E))
 
         # Configure the column and row weights
         self.master.columnconfigure(0, weight=1)
