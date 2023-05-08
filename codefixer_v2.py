@@ -6,6 +6,7 @@ import openai
 import time
 import difflib
 import os
+import datetime
 
 
 def save_dict_to_csv_file(data, model_name):
@@ -16,9 +17,9 @@ def save_dict_to_csv_file(data, model_name):
     """
     if not os.path.exists('data.csv'):
         with open('data.csv', 'w') as f:
-            f.write("prompt token,completion token, model\n")
+            f.write("prompt token,completion token, model, datetime\n")
     with open('data.csv', 'a') as f:
-        f.write(f"{data['prompt_tokens']},{data['completion_tokens']},{model_name}\n")
+        f.write(f"{data['prompt_tokens']},{data['completion_tokens']},{model_name},{datetime.datetime.now()}\n")
 
 
 
@@ -30,8 +31,8 @@ def get_updated_code(prompt):
     """
 
     # Set up the OpenAI API credentials
-    openai.api_key = os.environ.get("OPENAI_API_KEY_3")
-    model_engine = "gpt-3.5-turbo"
+    openai.api_key = os.environ.get("OPENAI_API_KEY_4")
+    model_engine = "gpt-4"
     start_time = time.time()
     # Generate corrected code using GPT-3.5 API
     response = openai.ChatCompletion.create(
@@ -123,7 +124,11 @@ def get_new_block_as_string(file_path, start_line, end_line):
     # Search backwards from start_line to find the start of the function or class
     start_index = None
     lines_searched = 0
-    for i in range(start_line - 1, max(start_line - backward_search_limit - 1, -1), -1):
+    if lines[start_line - 1].lstrip().startswith(('def ',)):
+        start_index = start_line - 1
+    for i in range(start_line - 2, max(start_line - backward_search_limit - 1, -1), -1):
+        if start_index is not None:
+            break
         lines_searched += 1
         line = lines[i]
         if line.lstrip().startswith(('if', 'for', 'def ', 'try', 'while', 'Class ')):
@@ -438,8 +443,11 @@ class CodeFixerUI:
             print("-----new code-----")
             print(updated_code)
             temp_prev_code = code.split('\n')
-            # get indentation of line 1
-            indentation = len(temp_prev_code[0]) - len(temp_prev_code[0].lstrip())
+            # get the smallest indentation in temp_prev_code
+            indentation = 100000
+            for line in temp_prev_code:
+                if line.strip() != '':
+                    indentation = min(indentation, len(line) - len(line.lstrip()))
             # remove indentation from all lines
             for i in range(len(temp_prev_code)):
                 temp_prev_code[i] = temp_prev_code[i][indentation:]
@@ -485,10 +493,11 @@ class CodeFixerUI:
             self.prev_code_text.delete(1.0, tk.END)
             self.updated_code_text.delete(1.0, tk.END)
             self.message_text.delete(1.0, tk.END)
+            self.response_time_text.delete(1.0, tk.END)
             self.prev_code_text.insert(tk.END, "No more bugs to process")
             self.updated_code_text.insert(tk.END, "No more bugs to process")
             self.message_text.insert(tk.END, "No more bugs to process")
-
+            self.response_time_text.insert(tk.END, "No more bugs to process")
 
 def main():
     root = tk.Tk()
