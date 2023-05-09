@@ -16,9 +16,9 @@ def save_dict_to_csv_file(data, model_name):
     Returns: None
     """
     if not os.path.exists('data.csv'):
-        with open('data.csv', 'w') as f:
+        with open('data.csv', 'w', encoding="utf8") as f:
             f.write("prompt token,completion token, model, datetime\n")
-    with open('data.csv', 'a') as f:
+    with open('data.csv', 'a', encoding="utf8") as f:
         f.write(f"{data['prompt_tokens']},{data['completion_tokens']},{model_name},{datetime.datetime.now()}\n")
 
 
@@ -80,19 +80,17 @@ def get_sonar_report_data(filename='sonarqube_bugs.json'):
     """
 
     # Open the file and read its contents
-    with open(filename, 'r') as file:
+    with open(filename, 'r', encoding="utf8") as file:
         data = json.load(file)
     # Extract the data we want
     all_data = []
     for issue in data['issues']:
         d = {}
         try:
-            flow = issue['flows'][0]
-            location = flow['locations'][0]
-            component = location['component']
+            component = issue['component']
             d['file_path'] = component.split(':')[-1]
-            d['start_line'] = location['textRange']['startLine']
-            d['end_line'] = location['textRange']['endLine']
+            d['start_line'] = issue['textRange']['startLine']
+            d['end_line'] = issue['textRange']['endLine']
             d['message'] = issue['message']
             all_data.append(d)
         except:
@@ -118,7 +116,7 @@ def get_new_block_as_string(file_path, start_line, end_line):
     backward_search_limit = 5
     forward_search_limit = 5
     # Open the file and read its contents
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding="utf8") as file:
         lines = file.readlines()
 
     # Search backwards from start_line to find the start of the function or class
@@ -185,7 +183,7 @@ def write_updated_code_to_file(file_path, code, prev_code=None):
     """
 
     # read the file
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding="utf8") as file:
         lines = file.readlines()
 
     # remove code from start_line to end_line
@@ -232,7 +230,7 @@ def write_updated_code_to_file(file_path, code, prev_code=None):
     # replace the code with the updated code and retain \n at the end of the line
     lines[start_index:end_index] = [code + '\n' for code in code.split('\n')]
     # write the updated code to the file
-    with open(file_path, 'w') as file:
+    with open(file_path, 'w', encoding="utf8") as file:
         file.writelines(lines)
 
     return
@@ -292,10 +290,12 @@ class CodeFixerUI:
         self.current_bug_index = 0
         self.path = None
 
-        self.precompute_all_suggestions()
-        # # Load the first bug on application start
-        # global code_data
-        # self.code_data = self.process_bug()
+        if os.environ.get("PRECOMPUTE") == "YES":
+            self.precompute_all_suggestions()
+        else:
+            # Load the first bug on application start
+            global code_data
+            self.code_data = self.process_bug()
 
     def highlight_differences(self):
         content1 = self.prev_code_text.get('1.0', tk.END).splitlines()
@@ -355,7 +355,7 @@ class CodeFixerUI:
 
     def write_precomputed_suggestions_to_file(self):
         # self.data is a list of dictionaries, write it to a json file
-        with open('precomputed_suggestions.json', 'w') as f:
+        with open('precomputed_suggestions.json', 'w', encoding="utf8") as f:
             json.dump(self.data, f)
 
     def precompute_all_suggestions(self):
@@ -391,7 +391,7 @@ class CodeFixerUI:
         self.code_data = self.process_bug()
 
     def get_data_from_precomputed_file(self):
-        with open('precomputed_suggestions.json', 'r') as f:
+        with open('precomputed_suggestions.json', 'r', encoding="utf8") as f:
             data = json.load(f)
         return data
 
@@ -402,7 +402,8 @@ class CodeFixerUI:
             self.prev_code_text.insert(1.0, 'Fetching...')
             self.updated_code_text.delete(1.0, tk.END)
             self.updated_code_text.insert(1.0, 'Fetching...')
-            self.data = self.get_data_from_precomputed_file()
+            if os.environ.get('PRECOMPUTE') == 'YES':
+                self.data = self.get_data_from_precomputed_file()
             d = self.data[self.current_bug_index]
             self.path = os.environ.get('CODE_PATH') + d['file_path']
             code, start_index, end_index = \
@@ -437,7 +438,10 @@ class CodeFixerUI:
             if wrong_code:
                 updated_code, response_time = get_updated_code(msg)  # Display the previous code in the UI
             else:
-                updated_code, response_time = d['suggested_code'], d['response_time']
+                if os.environ.get('PRECOMPUTE') == 'YES':
+                    updated_code, response_time = d['suggested_code'], d['response_time']
+                else:
+                    updated_code, response_time = get_updated_code(msg)
             print("-----old code-----")
             print(code)
             print("-----new code-----")
@@ -458,8 +462,11 @@ class CodeFixerUI:
                 temp_new_code.pop(0)
             while temp_new_code[-1] == '':
                 temp_new_code.pop(-1)
-            # get indentation of line 1
-            indentation = len(temp_new_code[0]) - len(temp_new_code[0].lstrip())
+            # get smallest indentation in temp_new_code
+            indentation = 100000
+            for line in temp_new_code:
+                if line.strip() != '':
+                    indentation = min(indentation, len(line) - len(line.lstrip()))
             # remove indentation from all lines
             for i in range(len(temp_new_code)):
                 temp_new_code[i] = temp_new_code[i][indentation:]
